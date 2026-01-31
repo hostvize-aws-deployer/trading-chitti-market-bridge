@@ -3,9 +3,11 @@ package api
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/trading-chitti/market-bridge/internal/auth"
+	"github.com/trading-chitti/market-bridge/internal/metrics"
 )
 
 // AuthMiddleware validates JWT tokens and adds user context
@@ -137,5 +139,28 @@ func AuditLogMiddleware() gin.HandlerFunc {
 			_ = userID
 		}
 		c.Next()
+	}
+}
+
+// MetricsMiddleware tracks HTTP request metrics for Prometheus
+func MetricsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+
+		// Process request
+		c.Next()
+
+		// Record metrics
+		duration := time.Since(start).Seconds()
+		status := c.Writer.Status()
+		method := c.Request.Method
+		endpoint := c.FullPath()
+
+		// Use the actual path if FullPath is empty (e.g., 404)
+		if endpoint == "" {
+			endpoint = c.Request.URL.Path
+		}
+
+		metrics.RecordHTTPRequest(method, endpoint, http.StatusText(status), duration)
 	}
 }

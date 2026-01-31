@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/trading-chitti/market-bridge/internal/database"
+	"github.com/trading-chitti/market-bridge/internal/metrics"
 )
 
 // CollectorInterface defines the interface that all collectors must implement
@@ -74,38 +75,53 @@ func (ucm *UnifiedCollectorManager) CreateMockCollector(name string, symbols []s
 // StartCollector starts a collector (real or mock)
 func (ucm *UnifiedCollectorManager) StartCollector(name string) error {
 	ucm.mu.RLock()
-	defer ucm.mu.RUnlock()
+	var err error
 
 	// Check real collectors
 	if collector, exists := ucm.realCollectors[name]; exists {
-		return collector.Start()
+		err = collector.Start()
+		ucm.mu.RUnlock()
+		if err == nil {
+			ucm.updateActiveCollectorsMetric()
+		}
+		return err
 	}
 
 	// Check mock collectors
 	if collector, exists := ucm.mockCollectors[name]; exists {
-		return collector.Start()
+		err = collector.Start()
+		ucm.mu.RUnlock()
+		if err == nil {
+			ucm.updateActiveCollectorsMetric()
+		}
+		return err
 	}
 
+	ucm.mu.RUnlock()
 	return fmt.Errorf("collector '%s' not found", name)
 }
 
 // StopCollector stops a collector
 func (ucm *UnifiedCollectorManager) StopCollector(name string) error {
 	ucm.mu.RLock()
-	defer ucm.mu.RUnlock()
 
 	// Check real collectors
 	if collector, exists := ucm.realCollectors[name]; exists {
 		collector.Stop()
+		ucm.mu.RUnlock()
+		ucm.updateActiveCollectorsMetric()
 		return nil
 	}
 
 	// Check mock collectors
 	if collector, exists := ucm.mockCollectors[name]; exists {
 		collector.Stop()
+		ucm.mu.RUnlock()
+		ucm.updateActiveCollectorsMetric()
 		return nil
 	}
 
+	ucm.mu.RUnlock()
 	return fmt.Errorf("collector '%s' not found", name)
 }
 
@@ -313,4 +329,28 @@ func (ucm *UnifiedCollectorManager) GetCollectorType(name string) (string, error
 	}
 
 	return "", fmt.Errorf("collector '%s' not found", name)
+}
+
+// updateActiveCollectorsMetric updates the Prometheus metric for active collectors
+func (ucm *UnifiedCollectorManager) updateActiveCollectorsMetric() {
+	ucm.mu.RLock()
+	defer ucm.mu.RUnlock()
+
+	activeCount := 0
+
+	// Count running real collectors
+	for _, collector := range ucm.realCollectors {
+		if collector.IsRunning() {
+			activeCount++
+		}
+	}
+
+	// Count running mock collectors
+	for _, collector := range ucm.mockCollectors {
+		if collector.IsRunning() {
+			activeCount++
+		}
+	}
+
+	metrics.SetActiveCollectors(activeCount)
 }

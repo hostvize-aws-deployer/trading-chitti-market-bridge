@@ -7,11 +7,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/trading-chitti/market-bridge/internal/api"
 	"github.com/trading-chitti/market-bridge/internal/auth"
 	"github.com/trading-chitti/market-bridge/internal/broker"
 	"github.com/trading-chitti/market-bridge/internal/database"
+	"github.com/trading-chitti/market-bridge/internal/metrics"
 	"github.com/trading-chitti/market-bridge/internal/services"
 )
 
@@ -79,9 +81,15 @@ func main() {
 	// Add CORS middleware
 	router.Use(api.CORSMiddleware())
 
+	// Add metrics middleware
+	router.Use(api.MetricsMiddleware())
+
 	// Initialize collector handler
 	collectorHandler := api.NewCollectorHandler(db)
 	defer collectorHandler.GetManager().StopAll()
+
+	// Initialize metrics (set initial collector count to 0)
+	metrics.SetActiveCollectors(0)
 
 	// Check if multi-user mode is enabled
 	multiUserMode := os.Getenv("MULTI_USER_MODE") == "true"
@@ -137,6 +145,10 @@ func main() {
 		// Register collector routes (public for backward compatibility)
 		collectorHandler.RegisterRoutes(router.Group("/api"))
 	}
+
+	// Register Prometheus metrics endpoint
+	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	log.Println("📊 Prometheus metrics endpoint: /metrics")
 
 	// Start server
 	port := os.Getenv("PORT")

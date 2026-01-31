@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/trading-chitti/market-bridge/internal/database"
+	"github.com/trading-chitti/market-bridge/internal/metrics"
 )
 
 // MockDataCollector generates fake market data for testing
@@ -281,6 +282,9 @@ func (mc *MockDataCollector) generateTickForSymbol(symbol string) error {
 	mc.lastTickAt = time.Now()
 	mc.mu.Unlock()
 
+	// Record metrics
+	metrics.RecordTick(mc.name, symbol)
+
 	return nil
 }
 
@@ -375,6 +379,9 @@ func (mc *MockDataCollector) aggregateBarForSymbol(symbol string) error {
 	mc.mu.Lock()
 	mc.barsGenerated++
 	mc.mu.Unlock()
+
+	// Record metrics
+	metrics.RecordBar(mc.name, "1m")
 
 	log.Printf("📊 Generated 1m bar for %s: O=%.2f H=%.2f L=%.2f C=%.2f V=%d",
 		symbol, open, high, low, close, volume)
