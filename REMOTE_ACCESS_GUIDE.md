@@ -23,17 +23,17 @@ Replace `localhost` with your Dynamic DNS domain:
 
 | Service | Local URL | **Remote URL** | Description |
 |---------|-----------|----------------|-------------|
-| **market-bridge** | http://localhost:6005 | **http://hari-fiberspot.tplinkdns.com:6005** | Real-time market data API |
 | **core-api** | http://localhost:6001 | **http://hari-fiberspot.tplinkdns.com:6001** | Core trading API |
 | **signal-service** | http://localhost:6002 | **http://hari-fiberspot.tplinkdns.com:6002** | Signal & alert service |
 | **dashboard** | http://localhost:6003 | **http://hari-fiberspot.tplinkdns.com:6003** | Web dashboard |
+| **market-bridge** | http://localhost:6005 | **http://hari-fiberspot.tplinkdns.com:6005** | Real-time market data API |
+| **Prometheus** | http://localhost:6090 | **http://hari-fiberspot.tplinkdns.com:6090** | Metrics & monitoring |
+| **Grafana** | http://localhost:6091 | **http://hari-fiberspot.tplinkdns.com:6091** | Monitoring dashboards |
 
-### Monitoring Stack (Local Only - Not Forwarded)
+### Database (Local Only - Not Forwarded)
 
-These require VPN or SSH tunnel for remote access:
+Intentionally not exposed for security:
 
-- **Prometheus**: http://localhost:9090 (in Docker)
-- **Grafana**: http://localhost:3000 (in Docker)
 - **PostgreSQL**: localhost:6432
 
 ---
@@ -43,18 +43,16 @@ These require VPN or SSH tunnel for remote access:
 All services now running on **forwarded ports** (6000-6999):
 
 ```bash
-# Service Status
+# Application Services (All Forwarded)
 core-api:        6001 ✅ FORWARDED
 signal-service:  6002 ✅ FORWARDED
 dashboard:       6003 ✅ FORWARDED
-market-bridge:   6005 ✅ FORWARDED (changed from 8080)
+market-bridge:   6005 ✅ FORWARDED
+Prometheus:      6090 ✅ FORWARDED (changed from 9090)
+Grafana:         6091 ✅ FORWARDED (changed from 3000)
 
-# Database (Local Access Only)
-PostgreSQL:      6432 ⚠️  NOT FORWARDED (intentional - security)
-
-# Monitoring (Docker Internal)
-Prometheus:      9090 ⚠️  NOT FORWARDED (use SSH tunnel)
-Grafana:         3000 ⚠️  NOT FORWARDED (use SSH tunnel)
+# Database (Local Access Only - Security)
+PostgreSQL:      6432 ⚠️  NOT FORWARDED (intentional)
 ```
 
 ---

@@ -81,8 +81,13 @@ ingress:
   - hostname: api.trading-chitti.com
     service: http://localhost:6005
 
-  # Note: Prometheus (9090) and Grafana (3000) are NOT in 6000 series
-  # Access them via SSH tunnel or local network only
+  # Prometheus (Monitoring)
+  - hostname: prometheus.trading-chitti.com
+    service: http://localhost:6090
+
+  # Grafana (Dashboards)
+  - hostname: grafana.trading-chitti.com
+    service: http://localhost:6091
 
   # Catch-all rule (required)
   - service: http_status:404
@@ -102,11 +107,13 @@ EOF
 3. Create DNS records:
 
 ```bash
-# Create CNAME records for each subdomain (6000 series ports only)
+# Create CNAME records for each subdomain (all 6000 series ports)
 cloudflared tunnel route dns trading-chitti core.trading-chitti.com
 cloudflared tunnel route dns trading-chitti signals.trading-chitti.com
 cloudflared tunnel route dns trading-chitti dashboard.trading-chitti.com
 cloudflared tunnel route dns trading-chitti api.trading-chitti.com
+cloudflared tunnel route dns trading-chitti prometheus.trading-chitti.com
+cloudflared tunnel route dns trading-chitti grafana.trading-chitti.com
 ```
 
 **Option B: Using Cloudflare Tunnel Domain (Free)**
@@ -160,12 +167,8 @@ https://core.trading-chitti.com/health      (port 6001)
 https://signals.trading-chitti.com/health   (port 6002)
 https://dashboard.trading-chitti.com        (port 6003)
 https://api.trading-chitti.com/health       (port 6005)
-```
-
-**Monitoring (Local/SSH Tunnel Only - Not in 6000 series):**
-```
-http://localhost:9090  (Prometheus - Docker)
-http://localhost:3000  (Grafana - Docker)
+https://prometheus.trading-chitti.com       (port 6090)
+https://grafana.trading-chitti.com          (port 6091)
 ```
 
 No port numbers needed! ✨
