@@ -98,6 +98,10 @@ func (a *API) RegisterRoutes(r *gin.Engine) {
 	intradayHandler := NewIntradayHandler(a.db)
 	intradayHandler.RegisterRoutes(r.Group(""))
 
+	// Data Collectors
+	collectorHandler := NewCollectorHandler(a.db)
+	collectorHandler.RegisterRoutes(r.Group(""))
+
 	// Analysis & Trading
 	trade := r.Group("/trade")
 	{
