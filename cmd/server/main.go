@@ -84,6 +84,14 @@ func main() {
 	// Add metrics middleware
 	router.Use(api.MetricsMiddleware())
 
+	// Add API key authentication (only if API_KEY is set)
+	if os.Getenv("API_KEY") != "" {
+		router.Use(api.APIKeyMiddleware())
+		log.Println("🔐 API key authentication enabled")
+	} else {
+		log.Println("⚠️  API key authentication disabled (set API_KEY to enable)")
+	}
+
 	// Initialize collector handler
 	collectorHandler := api.NewCollectorHandler(db)
 	defer collectorHandler.GetManager().StopAll()
