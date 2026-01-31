@@ -89,7 +89,11 @@ func (a *API) RegisterRoutes(r *gin.Engine) {
 		historical.GET("/52day", a.Get52DayHistorical)
 		historical.POST("/warm-cache", a.WarmCache)
 	}
-	
+
+	// Pattern Recognition
+	patternHandler := NewPatternHandler(a.broker, a.db)
+	patternHandler.RegisterRoutes(r.Group(""))
+
 	// Analysis & Trading
 	trade := r.Group("/trade")
 	{
