@@ -181,18 +181,27 @@ type Instrument struct {
 
 // BrokerConfig represents broker configuration from database
 type BrokerConfig struct {
-	ID             int
-	BrokerName     string    // zerodha, angelone, upstox, icicidirect
-	DisplayName    string
-	Enabled        bool
-	APIKey         string
-	APISecret      string
-	AccessToken    string
-	UserID         string
-	MaxPositions   int
+	ConfigID         int        `db:"config_id"`
+	UserID           string     `db:"user_id"`           // User who owns this broker account
+	BrokerName       string     `db:"broker_name"`       // zerodha, angelone, upstox, icicidirect
+	APIKey           string     `db:"api_key"`
+	APISecret        string     `db:"api_secret"`
+	AccessToken      string     `db:"access_token"`
+	RefreshToken     string     `db:"refresh_token"`
+	TokenExpiresAt   *time.Time `db:"token_expires_at"`
+	LastTokenRefresh *time.Time `db:"last_token_refresh"`
+	IsActive         bool       `db:"is_active"`
+	AccountName      string     `db:"account_name"`      // User-friendly name for this account
+	IsDefault        bool       `db:"is_default"`        // Default broker account for user
+	CreatedAt        time.Time  `db:"created_at"`
+	UpdatedAt        time.Time  `db:"updated_at"`
+
+	// Legacy fields for backward compatibility
+	ID              int
+	DisplayName     string
+	Enabled         bool
+	MaxPositions    int
 	MaxRiskPerTrade float64
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
 }
 
 // Factory creates broker instances based on config

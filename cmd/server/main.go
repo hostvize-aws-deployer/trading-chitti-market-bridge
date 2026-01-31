@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/trading-chitti/market-bridge/internal/api"
+	"github.com/trading-chitti/market-bridge/internal/auth"
 	"github.com/trading-chitti/market-bridge/internal/broker"
 	"github.com/trading-chitti/market-bridge/internal/database"
 	"github.com/trading-chitti/market-bridge/internal/services"
@@ -76,18 +76,56 @@ func main() {
 	// Create Gin router
 	router := gin.Default()
 
-	// Initialize API handlers
-	apiHandler := api.NewAPI(brk, db)
-	if wsHub != nil {
-		apiHandler.SetWebSocketHub(wsHub)
-	}
+	// Add CORS middleware
+	router.Use(api.CORSMiddleware())
 
-	// Register routes
-	apiHandler.RegisterRoutes(router)
+	// Check if multi-user mode is enabled
+	multiUserMode := os.Getenv("MULTI_USER_MODE") == "true"
 
-	// Register WebSocket routes
-	if wsHub != nil {
-		apiHandler.RegisterWebSocketRoutes(router)
+	if multiUserMode {
+		log.Println("🔐 Multi-user mode enabled")
+
+		// Initialize authentication service
+		jwtSecret := os.Getenv("JWT_SECRET")
+		if jwtSecret == "" {
+			log.Fatal("JWT_SECRET environment variable must be set in multi-user mode")
+		}
+		authService := auth.NewAuthService(jwtSecret)
+
+		// Initialize WebSocket hub manager for per-user hubs
+		wsHubManager := api.NewWebSocketHubManager(db)
+		defer wsHubManager.CloseAllHubs()
+
+		// Register authentication routes (public)
+		authHandler := api.NewAuthHandler(db, authService)
+		authHandler.RegisterRoutes(router.Group("/api"))
+
+		// Register broker management routes (authenticated)
+		brokerHandler := api.NewBrokerManagementHandler(db, authService)
+		authMiddleware := api.AuthMiddleware(authService, db)
+		brokerHandler.RegisterRoutes(router.Group("/api"), authMiddleware)
+
+		// Register API handlers with authentication
+		apiHandler := api.NewAPI(brk, db)
+		apiHandler.RegisterRoutes(router)
+
+		log.Println("✅ Multi-user authentication initialized")
+	} else {
+		log.Println("👤 Single-user mode (backward compatible)")
+
+		// Initialize API handlers
+		apiHandler := api.NewAPI(brk, db)
+		if wsHub != nil {
+			apiHandler.SetWebSocketHub(wsHub)
+		}
+
+		// Register routes
+		apiHandler.RegisterRoutes(router)
+
+		// Register WebSocket routes
+		if wsHub != nil {
+			apiHandler.RegisterWebSocketRoutes(router)
+		}
 	}
 
 	// Start server

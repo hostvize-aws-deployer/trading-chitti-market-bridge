@@ -3,10 +3,13 @@ package database
 import (
 	"database/sql"
 	"time"
-	
+
 	_ "github.com/lib/pq"
 	"github.com/trading-chitti/market-bridge/internal/broker"
 )
+
+// BrokerConfig is an alias for broker.BrokerConfig used in database operations
+type BrokerConfig = broker.BrokerConfig
 
 // Database handles PostgreSQL operations
 type Database struct {
