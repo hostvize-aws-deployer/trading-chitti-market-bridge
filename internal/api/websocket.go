@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"sync"
 	"time"
-	
+
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	kiteticker "github.com/zerodha/gokiteconnect/v4/ticker"
 )
 
@@ -51,13 +52,21 @@ func NewWebSocketHub(apiKey, accessToken string) *WebSocketHub {
 	// Initialize Zerodha WebSocket ticker
 	ticker := kiteticker.New(apiKey, accessToken)
 	hub.ticker = ticker
-	
+
+	// Enable auto-reconnect with retry logic
+	ticker.SetAutoReconnect(true)
+	ticker.SetReconnectMaxRetries(10)
+	ticker.SetReconnectMaxDelay(60 * time.Second)
+
 	// Set up ticker callbacks
 	ticker.OnConnect(hub.onTickerConnect)
 	ticker.OnTick(hub.onTick)
 	ticker.OnError(hub.onTickerError)
 	ticker.OnClose(hub.onTickerClose)
-	
+	ticker.OnReconnect(hub.onTickerReconnect)
+	ticker.OnNoReconnect(hub.onTickerNoReconnect)
+	ticker.OnOrderUpdate(hub.onOrderUpdate)
+
 	return hub
 }
 
@@ -142,6 +151,66 @@ func (h *WebSocketHub) onTickerError(err error) {
 
 func (h *WebSocketHub) onTickerClose(code int, reason string) {
 	log.Printf("⚠️  Ticker closed: %d - %s", code, reason)
+}
+
+func (h *WebSocketHub) onTickerReconnect(attempt int, delay time.Duration) {
+	log.Printf("🔄 Reconnecting to ticker... attempt %d, delay %v", attempt, delay)
+
+	// Broadcast reconnection status to all clients
+	data := map[string]interface{}{
+		"type":    "status",
+		"status":  "reconnecting",
+		"attempt": attempt,
+		"delay":   delay.String(),
+	}
+
+	if msg, err := json.Marshal(data); err == nil {
+		h.broadcast <- msg
+	}
+}
+
+func (h *WebSocketHub) onTickerNoReconnect(attempt int) {
+	log.Printf("❌ Max reconnection attempts reached (%d). Connection failed.", attempt)
+
+	// Broadcast connection failure to all clients
+	data := map[string]interface{}{
+		"type":    "status",
+		"status":  "disconnected",
+		"message": "Max reconnection attempts reached",
+	}
+
+	if msg, err := json.Marshal(data); err == nil {
+		h.broadcast <- msg
+	}
+}
+
+func (h *WebSocketHub) onOrderUpdate(order kiteconnect.Order) {
+	log.Printf("📋 Order Update: %s | Status: %s | Filled: %d/%d",
+		order.OrderID,
+		order.Status,
+		order.FilledQuantity,
+		order.Quantity)
+
+	// Broadcast order update to all clients
+	data := map[string]interface{}{
+		"type":            "order_update",
+		"order_id":        order.OrderID,
+		"status":          order.Status,
+		"tradingsymbol":   order.Tradingsymbol,
+		"exchange":        order.Exchange,
+		"transaction_type": order.TransactionType,
+		"quantity":        order.Quantity,
+		"filled_quantity": order.FilledQuantity,
+		"pending_quantity": order.PendingQuantity,
+		"price":           order.Price,
+		"average_price":   order.AveragePrice,
+		"status_message":  order.StatusMessage,
+		"timestamp":       order.OrderTimestamp.Time,
+	}
+
+	if msg, err := json.Marshal(data); err == nil {
+		h.broadcast <- msg
+	}
 }
 
 // HandleWebSocket handles WebSocket connections

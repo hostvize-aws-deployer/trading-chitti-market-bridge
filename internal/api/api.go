@@ -3,8 +3,9 @@ package api
 import (
 	"net/http"
 	"time"
-	
+
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"github.com/trading-chitti/market-bridge/internal/analyzer"
 	"github.com/trading-chitti/market-bridge/internal/broker"
 	"github.com/trading-chitti/market-bridge/internal/database"
@@ -12,18 +13,33 @@ import (
 
 // API handles HTTP requests
 type API struct {
-	broker   broker.Broker
-	db       *database.Database
-	analyzer *analyzer.Analyzer52D
+	broker            broker.Broker
+	db                *database.Database
+	analyzer          *analyzer.Analyzer52D
+	historicalService *database.HistoricalDataService
+	wsHub             *WebSocketHub
+	logger            *logrus.Logger
 }
 
 // NewAPI creates a new API handler
 func NewAPI(b broker.Broker, db *database.Database) *API {
+	logger := logrus.New()
+	logger.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp: true,
+	})
+
 	return &API{
-		broker:   b,
-		db:       db,
-		analyzer: analyzer.NewAnalyzer52D(),
+		broker:            b,
+		db:                db,
+		analyzer:          analyzer.NewAnalyzer52D(),
+		historicalService: database.NewHistoricalDataService(db, b),
+		logger:            logger,
 	}
+}
+
+// SetWebSocketHub sets the WebSocket hub for the API
+func (a *API) SetWebSocketHub(hub *WebSocketHub) {
+	a.wsHub = hub
 }
 
 // RegisterRoutes registers all API routes
@@ -56,6 +72,22 @@ func (a *API) RegisterRoutes(r *gin.Engine) {
 		market.POST("/ltp", a.GetLTP)
 		market.GET("/status", a.GetMarketStatus)
 		market.GET("/instruments/:exchange", a.GetInstruments)
+	}
+
+	// Instruments
+	instruments := r.Group("/instruments")
+	{
+		instruments.GET("/search", a.SearchInstruments)
+		instruments.GET("/:token", a.GetInstrumentByToken)
+		instruments.POST("/sync", a.SyncInstruments)
+	}
+
+	// Historical Data
+	historical := r.Group("/historical")
+	{
+		historical.POST("/", a.GetHistoricalData)
+		historical.GET("/52day", a.Get52DayHistorical)
+		historical.POST("/warm-cache", a.WarmCache)
 	}
 	
 	// Analysis & Trading

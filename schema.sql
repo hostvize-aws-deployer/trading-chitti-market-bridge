@@ -12,25 +12,31 @@ CREATE TABLE IF NOT EXISTS brokers.config (
     broker_name VARCHAR(50) NOT NULL, -- zerodha, angelone, upstox, icicidirect
     display_name VARCHAR(100) NOT NULL,
     enabled BOOLEAN DEFAULT FALSE,
-    
+
     -- API Credentials
     api_key TEXT NOT NULL,
     api_secret TEXT NOT NULL,
     access_token TEXT,
+    refresh_token TEXT,
     user_id TEXT,
-    
+
+    -- Token Management
+    token_expires_at TIMESTAMPTZ,
+    last_token_refresh TIMESTAMPTZ,
+
     -- Trading Configuration
     max_positions INTEGER DEFAULT 5,
     max_risk_per_trade NUMERIC(5,2) DEFAULT 2.0,
-    
+
     -- Timestamps
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    
+
     UNIQUE(broker_name, user_id)
 );
 
 CREATE INDEX idx_brokers_enabled ON brokers.config(enabled);
+CREATE INDEX idx_brokers_token_expiry ON brokers.config(token_expires_at) WHERE enabled = TRUE;
 
 -- ============================================================================
 -- ANALYSIS RESULTS (52-day analyzer output)
@@ -192,10 +198,72 @@ CREATE TABLE IF NOT EXISTS trades.ws_subscriptions (
     user_id TEXT NOT NULL,
     symbols TEXT[] NOT NULL,
     instrument_tokens BIGINT[],
-    
+
     created_at TIMESTAMPTZ DEFAULT NOW(),
     last_active TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ============================================================================
+-- INSTRUMENTS (Symbol to Token Mapping)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS trades.instruments (
+    instrument_token BIGINT PRIMARY KEY,
+    exchange_token BIGINT,
+    tradingsymbol TEXT NOT NULL,
+    name TEXT,
+    exchange TEXT NOT NULL,
+    segment TEXT,
+    instrument_type TEXT,
+
+    -- Equity specific
+    isin TEXT,
+
+    -- F&O specific
+    expiry DATE,
+    strike NUMERIC(12,2),
+    tick_size NUMERIC(8,2),
+    lot_size INTEGER,
+
+    -- Trading info
+    last_price NUMERIC(12,2),
+
+    -- Metadata
+    last_updated TIMESTAMPTZ DEFAULT NOW(),
+
+    UNIQUE(exchange, tradingsymbol)
+);
+
+CREATE INDEX idx_instruments_tradingsymbol ON trades.instruments(tradingsymbol);
+CREATE INDEX idx_instruments_exchange ON trades.instruments(exchange, tradingsymbol);
+CREATE INDEX idx_instruments_segment ON trades.instruments(segment);
+CREATE INDEX idx_instruments_expiry ON trades.instruments(expiry) WHERE expiry IS NOT NULL;
+
+-- ============================================================================
+-- HISTORICAL DATA CACHE
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS trades.historical_cache (
+    instrument_token BIGINT NOT NULL,
+    interval TEXT NOT NULL,
+    candle_timestamp TIMESTAMPTZ NOT NULL,
+
+    -- OHLCV
+    open NUMERIC(12,2) NOT NULL,
+    high NUMERIC(12,2) NOT NULL,
+    low NUMERIC(12,2) NOT NULL,
+    close NUMERIC(12,2) NOT NULL,
+    volume BIGINT NOT NULL,
+
+    -- F&O specific
+    oi BIGINT,
+
+    -- Metadata
+    cached_at TIMESTAMPTZ DEFAULT NOW(),
+
+    PRIMARY KEY (instrument_token, interval, candle_timestamp)
+);
+
+CREATE INDEX idx_historical_token_interval ON trades.historical_cache(instrument_token, interval, candle_timestamp DESC);
+CREATE INDEX idx_historical_timestamp ON trades.historical_cache(candle_timestamp DESC);
 
 -- ============================================================================
 -- GRANTS
@@ -232,6 +300,9 @@ BEGIN
     RAISE NOTICE '✅ Market Bridge schema created successfully';
     RAISE NOTICE '   - Created schemas: brokers, trades';
     RAISE NOTICE '   - Created tables: config, analysis, executions, signals, performance';
+    RAISE NOTICE '   - Instrument token mapping: trades.instruments';
+    RAISE NOTICE '   - Historical data caching: trades.historical_cache';
+    RAISE NOTICE '   - Token auto-refresh: brokers.config (refresh_token, token_expires_at)';
     RAISE NOTICE '   - WebSocket support enabled';
     RAISE NOTICE '   - Multi-broker architecture ready';
 END $$;

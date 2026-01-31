@@ -35,8 +35,13 @@ func NewZerodhaBroker(config *BrokerConfig) (*ZerodhaBroker, error) {
 	}
 	
 	broker.logger.Info("✅ Zerodha broker initialized")
-	
+
 	return broker, nil
+}
+
+// GetClient returns the underlying Kite Connect client
+func (z *ZerodhaBroker) GetClient() *kiteconnect.Client {
+	return z.kite
 }
 
 // GetLoginURL returns the Zerodha login URL
