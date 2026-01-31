@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/trading-chitti/market-bridge/internal/database"
+	"github.com/trading-chitti/market-bridge/internal/watchlist"
 )
 
 // CollectorManager manages multiple data collectors
@@ -162,4 +163,96 @@ func (cm *CollectorManager) UnsubscribeSymbols(collectorName string, symbols []s
 	}
 
 	return collector.Unsubscribe(tokens)
+}
+
+// LoadAndStartFromConfig loads configuration and starts auto-start collectors
+func (cm *CollectorManager) LoadAndStartFromConfig(configPath string) error {
+	config, err := LoadConfigFromFile(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Expand environment variables
+	ExpandEnvVars(config)
+
+	started := 0
+	for _, collectorCfg := range config.Collectors {
+		if !collectorCfg.AutoStart {
+			log.Printf("⏭️  Skipping collector: %s (auto_start=false)", collectorCfg.Name)
+			continue
+		}
+
+		// Create collector
+		collector, err := cm.CreateCollector(collectorCfg.Name, collectorCfg.APIKey, collectorCfg.AccessToken)
+		if err != nil {
+			log.Printf("❌ Failed to create collector '%s': %v", collectorCfg.Name, err)
+			continue
+		}
+
+		// Subscribe to symbols from watchlists
+		var allSymbols []string
+		for _, watchlistName := range collectorCfg.Watchlists {
+			wl := GetWatchlistFromName(watchlistName)
+			if wl != nil {
+				allSymbols = append(allSymbols, wl.Symbols...)
+			} else {
+				log.Printf("⚠️  Watchlist not found: %s", watchlistName)
+			}
+		}
+
+		// Add individual symbols
+		allSymbols = append(allSymbols, collectorCfg.Symbols...)
+
+		// Remove duplicates
+		uniqueSymbols := removeDuplicates(allSymbols)
+
+		// Subscribe to symbols
+		if len(uniqueSymbols) > 0 {
+			if err := cm.SubscribeSymbols(collectorCfg.Name, uniqueSymbols); err != nil {
+				log.Printf("❌ Failed to subscribe symbols for '%s': %v", collectorCfg.Name, err)
+				continue
+			}
+		}
+
+		// Set mode
+		if collectorCfg.Mode != "" {
+			tokens := collector.subscribedTokens
+			if err := collector.SetMode(collectorCfg.Mode, tokens); err != nil {
+				log.Printf("⚠️  Failed to set mode for '%s': %v", collectorCfg.Name, err)
+			}
+		}
+
+		// Start collector
+		if err := cm.StartCollector(collectorCfg.Name); err != nil {
+			log.Printf("❌ Failed to start collector '%s': %v", collectorCfg.Name, err)
+			continue
+		}
+
+		started++
+		log.Printf("✅ Auto-started collector: %s (%d symbols, mode: %s)",
+			collectorCfg.Name, len(uniqueSymbols), collectorCfg.Mode)
+	}
+
+	log.Printf("🚀 Auto-started %d/%d collectors", started, len(config.Collectors))
+	return nil
+}
+
+// Helper function to get watchlist by name
+func GetWatchlistFromName(name string) *watchlist.Watchlist {
+	return watchlist.GetWatchlist(name)
+}
+
+// Helper function to remove duplicates from string slice
+func removeDuplicates(slice []string) []string {
+	seen := make(map[string]bool)
+	result := []string{}
+
+	for _, item := range slice {
+		if !seen[item] {
+			seen[item] = true
+			result = append(result, item)
+		}
+	}
+
+	return result
 }

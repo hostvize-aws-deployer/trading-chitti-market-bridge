@@ -1,0 +1,51 @@
+# Market Bridge Collector Auto-Start Configuration
+# Copy this file to ~/.market-bridge/collectors.yaml and customize
+
+collectors:
+  # Primary collector for NIFTY50 and BANKNIFTY
+  - name: primary
+    api_key: ${ZERODHA_API_KEY}
+    access_token: ${ZERODHA_ACCESS_TOKEN}
+    auto_start: true
+    watchlists:
+      - NIFTY50
+      - BANKNIFTY
+    mode: full  # ltp, quote, or full
+
+  # Secondary collector for specific stocks
+  - name: stocks
+    api_key: ${ZERODHA_API_KEY}
+    access_token: ${ZERODHA_ACCESS_TOKEN}
+    auto_start: false
+    symbols:
+      - RELIANCE
+      - TCS
+      - INFY
+      - HDFCBANK
+      - ICICIBANK
+    mode: quote
+
+  # Sector-specific collector
+  - name: sectors
+    api_key: ${ZERODHA_API_KEY}
+    access_token: ${ZERODHA_ACCESS_TOKEN}
+    auto_start: false
+    watchlists:
+      - IT
+      - PHARMA
+      - AUTO
+      - METAL
+    mode: full
+
+# Environment Variables:
+# - ZERODHA_API_KEY: Your Zerodha API key
+# - ZERODHA_ACCESS_TOKEN: Your Zerodha access token (from session)
+#
+# Example:
+#   export ZERODHA_API_KEY="your_api_key"
+#   export ZERODHA_ACCESS_TOKEN="your_access_token"
+#
+# Then start the server:
+#   ./market-bridge
+#
+# Auto-start collectors will be started automatically on server boot.
