@@ -10,13 +10,13 @@ import (
 
 // CollectorHandler handles data collector API requests
 type CollectorHandler struct {
-	manager *collector.CollectorManager
+	manager *collector.UnifiedCollectorManager
 }
 
 // NewCollectorHandler creates a new collector handler
 func NewCollectorHandler(db *database.Database) *CollectorHandler {
 	return &CollectorHandler{
-		manager: collector.NewCollectorManager(db),
+		manager: collector.NewUnifiedCollectorManager(db),
 	}
 }
 
@@ -31,15 +31,18 @@ func (h *CollectorHandler) RegisterRoutes(r *gin.RouterGroup) {
 		collectors.POST("/:name/stop", h.StopCollector)
 		collectors.POST("/:name/subscribe", h.SubscribeSymbols)
 		collectors.POST("/:name/unsubscribe", h.UnsubscribeSymbols)
+		collectors.DELETE("/:name", h.DeleteCollector)
 		collectors.GET("/metrics", h.GetMetrics)
 	}
 }
 
 // CreateCollectorRequest represents collector creation request
 type CreateCollectorRequest struct {
-	Name        string `json:"name" binding:"required"`
-	APIKey      string `json:"api_key" binding:"required"`
-	AccessToken string `json:"access_token" binding:"required"`
+	Name        string   `json:"name" binding:"required"`
+	Type        string   `json:"type" binding:"required"` // "real" or "mock"
+	APIKey      string   `json:"api_key"`                 // Required for real collectors
+	AccessToken string   `json:"access_token"`            // Required for real collectors
+	Symbols     []string `json:"symbols"`                 // Required for mock collectors
 }
 
 // SubscribeRequest represents symbol subscription request
@@ -58,7 +61,31 @@ func (h *CollectorHandler) CreateCollector(c *gin.Context) {
 		return
 	}
 
-	_, err := h.manager.CreateCollector(req.Name, req.APIKey, req.AccessToken)
+	var err error
+	switch req.Type {
+	case "real":
+		if req.APIKey == "" || req.AccessToken == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "api_key and access_token are required for real collectors",
+			})
+			return
+		}
+		err = h.manager.CreateRealCollector(req.Name, req.APIKey, req.AccessToken)
+	case "mock":
+		if len(req.Symbols) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "symbols are required for mock collectors",
+			})
+			return
+		}
+		err = h.manager.CreateMockCollector(req.Name, req.Symbols)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "type must be 'real' or 'mock'",
+		})
+		return
+	}
+
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -69,27 +96,14 @@ func (h *CollectorHandler) CreateCollector(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "collector created successfully",
 		"name":    req.Name,
+		"type":    req.Type,
 	})
 }
 
 // ListCollectors lists all collectors
 // GET /collectors
 func (h *CollectorHandler) ListCollectors(c *gin.Context) {
-	names := h.manager.ListCollectors()
-
-	collectors := make([]gin.H, 0, len(names))
-	for _, name := range names {
-		collector, err := h.manager.GetCollector(name)
-		if err != nil {
-			continue
-		}
-
-		collectors = append(collectors, gin.H{
-			"name":    name,
-			"running": collector.IsRunning(),
-			"metrics": collector.GetMetrics(),
-		})
-	}
+	collectors := h.manager.ListCollectors()
 
 	c.JSON(http.StatusOK, gin.H{
 		"collectors": collectors,
@@ -102,7 +116,7 @@ func (h *CollectorHandler) ListCollectors(c *gin.Context) {
 func (h *CollectorHandler) GetCollectorStatus(c *gin.Context) {
 	name := c.Param("name")
 
-	collector, err := h.manager.GetCollector(name)
+	metrics, err := h.manager.GetCollectorMetrics(name)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": err.Error(),
@@ -110,11 +124,7 @@ func (h *CollectorHandler) GetCollectorStatus(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"name":    name,
-		"running": collector.IsRunning(),
-		"metrics": collector.GetMetrics(),
-	})
+	c.JSON(http.StatusOK, metrics)
 }
 
 // StartCollector starts a data collector
@@ -218,7 +228,25 @@ func (h *CollectorHandler) GetMetrics(c *gin.Context) {
 	})
 }
 
+// DeleteCollector deletes a collector
+// DELETE /collectors/:name
+func (h *CollectorHandler) DeleteCollector(c *gin.Context) {
+	name := c.Param("name")
+
+	if err := h.manager.DeleteCollector(name); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "collector deleted successfully",
+		"name":    name,
+	})
+}
+
 // GetManager returns the collector manager (for main.go integration)
-func (h *CollectorHandler) GetManager() *collector.CollectorManager {
+func (h *CollectorHandler) GetManager() *collector.UnifiedCollectorManager {
 	return h.manager
 }

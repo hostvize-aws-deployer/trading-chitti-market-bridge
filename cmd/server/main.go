@@ -79,6 +79,10 @@ func main() {
 	// Add CORS middleware
 	router.Use(api.CORSMiddleware())
 
+	// Initialize collector handler
+	collectorHandler := api.NewCollectorHandler(db)
+	defer collectorHandler.GetManager().StopAll()
+
 	// Check if multi-user mode is enabled
 	multiUserMode := os.Getenv("MULTI_USER_MODE") == "true"
 
@@ -109,6 +113,9 @@ func main() {
 		apiHandler := api.NewAPI(brk, db)
 		apiHandler.RegisterRoutes(router)
 
+		// Register collector routes (authenticated)
+		// collectorHandler.RegisterRoutes(router.Group("/api"), authMiddleware)
+
 		log.Println("✅ Multi-user authentication initialized")
 	} else {
 		log.Println("👤 Single-user mode (backward compatible)")
@@ -126,6 +133,9 @@ func main() {
 		if wsHub != nil {
 			apiHandler.RegisterWebSocketRoutes(router)
 		}
+
+		// Register collector routes (public for backward compatibility)
+		collectorHandler.RegisterRoutes(router.Group("/api"))
 	}
 
 	// Start server

@@ -205,7 +205,7 @@ func (h *BrokerManagementHandler) GetBrokerAccount(c *gin.Context) {
 
 // UpdateBrokerAccount updates a broker account
 func (h *BrokerManagementHandler) UpdateBrokerAccount(c *gin.Context) {
-	userID, exists := RequireUserID(c)
+	_, exists := RequireUserID(c)
 	if !exists {
 		return
 	}
@@ -258,7 +258,7 @@ func (h *BrokerManagementHandler) DeleteBrokerAccount(c *gin.Context) {
 
 // SetDefaultBrokerAccount sets a broker account as the default
 func (h *BrokerManagementHandler) SetDefaultBrokerAccount(c *gin.Context) {
-	userID, exists := RequireUserID(c)
+	_, exists := RequireUserID(c)
 	if !exists {
 		return
 	}

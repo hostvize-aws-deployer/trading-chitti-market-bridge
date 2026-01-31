@@ -6,7 +6,9 @@ import (
 	"sync"
 	"time"
 
+	kiteconnect "github.com/zerodha/gokiteconnect/v4"
 	kiteticker "github.com/zerodha/gokiteconnect/v4/ticker"
+	"github.com/zerodha/gokiteconnect/v4/models"
 	"github.com/trading-chitti/market-bridge/internal/database"
 )
 
@@ -102,10 +104,7 @@ func (dc *DataCollector) Start() error {
 
 	// Serve (blocking call)
 	go func() {
-		if err := dc.ticker.Serve(); err != nil {
-			log.Printf("❌ Ticker serve error: %v", err)
-			dc.errors++
-		}
+		dc.ticker.Serve()
 	}()
 
 	log.Println("✅ Data collector started")
@@ -223,16 +222,14 @@ func (dc *DataCollector) onConnect() {
 	}
 }
 
-func (dc *DataCollector) onTick(ticks []kiteticker.Tick) {
-	dc.ticksReceived += int64(len(ticks))
+func (dc *DataCollector) onTick(tick models.Tick) {
+	dc.ticksReceived++
 
-	for _, tick := range ticks {
-		// Store tick data
-		go dc.storeTick(tick)
+	// Store tick data
+	go dc.storeTick(tick)
 
-		// Update candle builders
-		go dc.updateCandles(tick)
-	}
+	// Update candle builders
+	go dc.updateCandles(tick)
 }
 
 func (dc *DataCollector) onReconnect(attempt int, delay time.Duration) {
@@ -253,7 +250,7 @@ func (dc *DataCollector) onClose(code int, reason string) {
 	log.Printf("🔌 Connection closed: code=%d, reason=%s", code, reason)
 }
 
-func (dc *DataCollector) onOrderUpdate(order kiteticker.Order) {
+func (dc *DataCollector) onOrderUpdate(order kiteconnect.Order) {
 	log.Printf("📋 Order update: %s - %s", order.OrderID, order.Status)
 	// TODO: Store order updates in database
 }
@@ -262,33 +259,49 @@ func (dc *DataCollector) onOrderUpdate(order kiteticker.Order) {
 // DATA STORAGE
 // ============================================================================
 
-func (dc *DataCollector) storeTick(tick kiteticker.Tick) {
+func (dc *DataCollector) storeTick(tickData interface{}) {
+	// Type assert to kiteticker.Tick
+	tick, ok := tickData.(map[string]interface{})
+	if !ok {
+		return
+	}
+	// Extract instrument token
+	instrumentToken, ok := tick["instrument_token"].(uint32)
+	if !ok {
+		return
+	}
+
 	dc.mu.RLock()
-	symbol, exists := dc.tokenToSymbol[tick.InstrumentToken]
+	symbol, exists := dc.tokenToSymbol[instrumentToken]
 	dc.mu.RUnlock()
 
 	if !exists {
 		return
 	}
 
-	tickData := &database.TickData{
+	// Extract price and quantity
+	lastPrice, _ := tick["last_price"].(float64)
+	lastQuantity, _ := tick["last_quantity"].(uint32)
+	timestamp, _ := tick["timestamp"].(time.Time)
+
+	dbTickData := &database.TickData{
 		Exchange:        "NSE", // TODO: Get from instrument lookup
 		Symbol:          symbol,
-		InstrumentToken: int64(tick.InstrumentToken),
-		TickTimestamp:   tick.Timestamp.Time,
-		Price:           tick.LastPrice,
-		Quantity:        int64(tick.LastQuantity),
+		InstrumentToken: int64(instrumentToken),
+		TickTimestamp:   timestamp,
+		Price:           lastPrice,
+		Quantity:        int64(lastQuantity),
 		TradeType:       "unknown",
 		Source:          "zerodha",
 	}
 
-	if err := dc.db.InsertTickData(tickData); err != nil {
+	if err := dc.db.InsertTickData(dbTickData); err != nil {
 		log.Printf("❌ Failed to store tick: %v", err)
 		dc.errors++
 	}
 }
 
-func (dc *DataCollector) updateCandles(tick kiteticker.Tick) {
+func (dc *DataCollector) updateCandles(tick models.Tick) {
 	dc.builderMu.RLock()
 	builder, exists := dc.candleBuilders[tick.InstrumentToken]
 	dc.builderMu.RUnlock()
@@ -316,7 +329,7 @@ func (dc *DataCollector) updateCandles(tick kiteticker.Tick) {
 		builder.CurrentHigh = tick.LastPrice
 		builder.CurrentLow = tick.LastPrice
 		builder.CurrentClose = tick.LastPrice
-		builder.CurrentVolume = int64(tick.LastQuantity)
+		builder.CurrentVolume = int64(tick.LastTradedQuantity)
 	} else {
 		// Update existing candle
 		if tick.LastPrice > builder.CurrentHigh {
@@ -326,7 +339,7 @@ func (dc *DataCollector) updateCandles(tick kiteticker.Tick) {
 			builder.CurrentLow = tick.LastPrice
 		}
 		builder.CurrentClose = tick.LastPrice
-		builder.CurrentVolume += int64(tick.LastQuantity)
+		builder.CurrentVolume += int64(tick.LastTradedQuantity)
 	}
 }
 

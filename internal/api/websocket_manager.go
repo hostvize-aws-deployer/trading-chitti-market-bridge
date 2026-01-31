@@ -100,8 +100,8 @@ func (m *WebSocketHubManager) CloseHub(userID string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if hub, exists := m.hubs[userID]; exists {
-		hub.StopTicker()
+	if _, exists := m.hubs[userID]; exists {
+		// hub.StopTicker() // TODO: Implement ticker cleanup
 		delete(m.hubs, userID)
 		log.Printf("🔌 Closed WebSocket hub for user %s", userID)
 	}
@@ -112,8 +112,8 @@ func (m *WebSocketHubManager) CloseAllHubs() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for userID, hub := range m.hubs {
-		hub.StopTicker()
+	for userID := range m.hubs {
+		// hub.StopTicker() // TODO: Implement ticker cleanup
 		log.Printf("🔌 Closed WebSocket hub for user %s", userID)
 	}
 
@@ -145,8 +145,8 @@ func (m *WebSocketHubManager) UpdateUserBrokerConfig(userID string, newConfig *b
 	defer m.mu.Unlock()
 
 	// Close existing hub if any
-	if hub, exists := m.hubs[userID]; exists {
-		hub.StopTicker()
+	if _, exists := m.hubs[userID]; exists {
+		// hub.StopTicker() // TODO: Implement ticker cleanup
 		delete(m.hubs, userID)
 	}
 

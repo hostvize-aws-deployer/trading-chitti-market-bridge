@@ -40,7 +40,7 @@ type StreamMessage struct {
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
-var upgrader = websocket.Upgrader{
+var streamingUpgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
@@ -345,14 +345,14 @@ func NewStreamingHandler(db *database.Database) *StreamingHandler {
 func (h *StreamingHandler) RegisterRoutes(r *gin.RouterGroup) {
 	stream := r.Group("/stream")
 	{
-		stream.GET("/live", h.HandleWebSocket)
+		stream.GET("/ws", h.HandleWebSocket)
 		stream.GET("/stats", h.GetStats)
 	}
 }
 
 // HandleWebSocket handles WebSocket connections
 func (h *StreamingHandler) HandleWebSocket(c *gin.Context) {
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	conn, err := streamingUpgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Printf("WebSocket upgrade error: %v", err)
 		return

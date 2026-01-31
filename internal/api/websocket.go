@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	kiteconnect "github.com/zerodha/gokiteconnect/v4"
+	"github.com/zerodha/gokiteconnect/v4/models"
 	kiteticker "github.com/zerodha/gokiteconnect/v4/ticker"
 )
 
@@ -45,7 +46,7 @@ func NewWebSocketHub(apiKey, accessToken string) *WebSocketHub {
 	hub := &WebSocketHub{
 		clients:    make(map[*WebSocketClient]bool),
 		broadcast:  make(chan []byte, 256),
-		register:   chan *WebSocketClient,
+		register:   make(chan *WebSocketClient),
 		unregister: make(chan *WebSocketClient),
 	}
 	
@@ -122,26 +123,24 @@ func (h *WebSocketHub) onTickerConnect() {
 	log.Println("✅ Zerodha WebSocket ticker connected")
 }
 
-func (h *WebSocketHub) onTick(ticks []kiteticker.Tick) {
-	for _, tick := range ticks {
-		data := map[string]interface{}{
-			"type":          "tick",
-			"instrument_token": tick.InstrumentToken,
-			"last_price":    tick.LastPrice,
-			"last_quantity": tick.LastTradedQuantity,
-			"volume":        tick.VolumeTraded,
-			"timestamp":     tick.Timestamp.Time,
-			"ohlc": map[string]float64{
-				"open":  tick.OHLC.Open,
-				"high":  tick.OHLC.High,
-				"low":   tick.OHLC.Low,
-				"close": tick.OHLC.Close,
-			},
-		}
-		
-		if msg, err := json.Marshal(data); err == nil {
-			h.broadcast <- msg
-		}
+func (h *WebSocketHub) onTick(tick models.Tick) {
+	data := map[string]interface{}{
+		"type":          "tick",
+		"instrument_token": tick.InstrumentToken,
+		"last_price":    tick.LastPrice,
+		"last_quantity": tick.LastTradedQuantity,
+		"volume":        tick.VolumeTraded,
+		"timestamp":     tick.Timestamp.Time,
+		"ohlc": map[string]float64{
+			"open":  tick.OHLC.Open,
+			"high":  tick.OHLC.High,
+			"low":   tick.OHLC.Low,
+			"close": tick.OHLC.Close,
+		},
+	}
+
+	if msg, err := json.Marshal(data); err == nil {
+		h.broadcast <- msg
 	}
 }
 
@@ -196,7 +195,7 @@ func (h *WebSocketHub) onOrderUpdate(order kiteconnect.Order) {
 		"type":            "order_update",
 		"order_id":        order.OrderID,
 		"status":          order.Status,
-		"tradingsymbol":   order.Tradingsymbol,
+		"tradingsymbol":   order.TradingSymbol,
 		"exchange":        order.Exchange,
 		"transaction_type": order.TransactionType,
 		"quantity":        order.Quantity,

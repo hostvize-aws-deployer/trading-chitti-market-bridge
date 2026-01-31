@@ -70,7 +70,7 @@ func (s *HistoricalDataService) GetHistoricalData(
 			Low:              candle.Low,
 			Close:            candle.Close,
 			Volume:           int64(candle.Volume),
-			OI:               int64(candle.OI),
+			OI:               0, // OI not available in broker.Candle
 			CachedAt:         time.Now(),
 		}
 	}

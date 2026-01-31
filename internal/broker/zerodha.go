@@ -96,18 +96,16 @@ func (z *ZerodhaBroker) GetMargins() (*Margins, error) {
 	}
 	
 	result := &Margins{}
-	
-	if equity, ok := margins["equity"]; ok {
-		result.Equity.Available = equity.Available.Cash
-		result.Equity.Used = equity.Utilised.Debits
-		result.Equity.Net = equity.Net
-	}
-	
-	if commodity, ok := margins["commodity"]; ok {
-		result.Commodity.Available = commodity.Available.Cash
-		result.Commodity.Used = commodity.Utilised.Debits
-		result.Commodity.Net = commodity.Net
-	}
+
+	// Access equity margins
+	result.Equity.Available = margins.Equity.Available.Cash
+	result.Equity.Used = margins.Equity.Used.Debits
+	result.Equity.Net = margins.Equity.Net
+
+	// Access commodity margins
+	result.Commodity.Available = margins.Commodity.Available.Cash
+	result.Commodity.Used = margins.Commodity.Used.Debits
+	result.Commodity.Net = margins.Commodity.Net
 	
 	z.logger.Infof("💰 Equity Available: ₹%.2f", result.Equity.Available)
 	
@@ -131,23 +129,23 @@ func (z *ZerodhaBroker) GetPositions() (*Positions, error) {
 			Symbol:       p.Tradingsymbol,
 			Exchange:     p.Exchange,
 			Product:      p.Product,
-			Quantity:     p.Quantity,
+			Quantity:     int(p.Quantity),
 			AveragePrice: p.AveragePrice,
 			LastPrice:    p.LastPrice,
-			PNL:          p.PNL,
-			Overnight:    p.Overnight,
+			PNL:          p.PnL,
+			Overnight:    p.OvernightQuantity > 0,
 		})
 	}
-	
+
 	for _, p := range positions.Day {
 		result.Day = append(result.Day, Position{
 			Symbol:       p.Tradingsymbol,
 			Exchange:     p.Exchange,
 			Product:      p.Product,
-			Quantity:     p.Quantity,
+			Quantity:     int(p.Quantity),
 			AveragePrice: p.AveragePrice,
 			LastPrice:    p.LastPrice,
-			PNL:          p.PNL,
+			PNL:          p.PnL,
 			Overnight:    false,
 		})
 	}
@@ -169,10 +167,10 @@ func (z *ZerodhaBroker) GetHoldings() ([]Holding, error) {
 		result = append(result, Holding{
 			Symbol:       h.Tradingsymbol,
 			Exchange:     h.Exchange,
-			Quantity:     h.Quantity,
+			Quantity:     int(h.Quantity),
 			AveragePrice: h.AveragePrice,
 			LastPrice:    h.LastPrice,
-			PNL:          h.PNL,
+			PNL:          h.PnL,
 			PNLPercent:   (h.LastPrice - h.AveragePrice) / h.AveragePrice * 100,
 		})
 	}
@@ -193,17 +191,17 @@ func (z *ZerodhaBroker) GetOrders() ([]Order, error) {
 	for _, o := range orders {
 		result = append(result, Order{
 			OrderID:          o.OrderID,
-			Symbol:           o.Tradingsymbol,
+			Symbol:           o.TradingSymbol,
 			Exchange:         o.Exchange,
 			TransactionType:  o.TransactionType,
 			OrderType:        o.OrderType,
 			Product:          o.Product,
-			Quantity:         o.Quantity,
+			Quantity:         int(o.Quantity),
 			Price:            o.Price,
 			TriggerPrice:     o.TriggerPrice,
 			Status:           o.Status,
-			FilledQuantity:   o.FilledQuantity,
-			PendingQuantity:  o.PendingQuantity,
+			FilledQuantity:   int(o.FilledQuantity),
+			PendingQuantity:  int(o.PendingQuantity),
 			AveragePrice:     o.AveragePrice,
 			PlacedAt:         o.OrderTimestamp.Time,
 			UpdatedAt:        o.ExchangeUpdateTimestamp.Time,
@@ -290,9 +288,9 @@ func (z *ZerodhaBroker) GetInstruments(exchange string) ([]Instrument, error) {
 				InstrumentType:  inst.InstrumentType,
 				Segment:         inst.Segment,
 				Expiry:          expiry,
-				Strike:          inst.Strike,
+				Strike:          inst.StrikePrice,
 				TickSize:        inst.TickSize,
-				LotSize:         inst.LotSize,
+				LotSize:         int(inst.LotSize),
 			})
 		}
 	}
@@ -357,7 +355,7 @@ func (z *ZerodhaBroker) ModifyOrder(orderID string, modify *OrderModify) (string
 
 // CancelOrder cancels an order
 func (z *ZerodhaBroker) CancelOrder(orderID string) (string, error) {
-	response, err := z.kite.CancelOrder(kiteconnect.VarietyRegular, orderID)
+	response, err := z.kite.CancelOrder(kiteconnect.VarietyRegular, orderID, nil)
 	if err != nil {
 		return "", err
 	}

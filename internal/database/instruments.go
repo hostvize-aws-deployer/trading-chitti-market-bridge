@@ -57,8 +57,8 @@ func (db *Database) SyncInstrumentsFromBroker(brk broker.Broker) error {
 // convertToDBInstrument converts Kite instrument to database instrument
 func convertToDBInstrument(kiteInst kiteconnect.Instrument) Instrument {
 	inst := Instrument{
-		InstrumentToken: kiteInst.InstrumentToken,
-		ExchangeToken:   kiteInst.ExchangeToken,
+		InstrumentToken: uint32(kiteInst.InstrumentToken),
+		ExchangeToken:   uint32(kiteInst.ExchangeToken),
 		Tradingsymbol:   kiteInst.Tradingsymbol,
 		Name:            kiteInst.Name,
 		Exchange:        kiteInst.Exchange,
@@ -75,9 +75,9 @@ func convertToDBInstrument(kiteInst kiteconnect.Instrument) Instrument {
 		inst.Expiry = &kiteInst.Expiry.Time
 	}
 
-	// Handle strike
-	if kiteInst.Strike > 0 {
-		inst.Strike = kiteInst.Strike
+	// Handle strike (using StrikePrice field)
+	if kiteInst.StrikePrice > 0 {
+		inst.Strike = kiteInst.StrikePrice
 	}
 
 	return inst

@@ -106,11 +106,9 @@ func (a *API) RegisterRoutes(r *gin.Engine) {
 	watchlistHandler := NewWatchlistHandler()
 	watchlistHandler.RegisterRoutes(r.Group(""))
 
-	// WebSocket Streaming (if hub is initialized)
-	if a.wsHub != nil {
-		streamHandler := NewStreamingHandler(a.wsHub)
-		streamHandler.RegisterRoutes(r.Group(""))
-	}
+	// WebSocket Streaming for market data
+	streamHandler := NewStreamingHandler(a.db)
+	streamHandler.RegisterRoutes(r.Group(""))
 
 	// Analysis & Trading
 	trade := r.Group("/trade")

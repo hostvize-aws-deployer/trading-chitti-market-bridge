@@ -135,8 +135,8 @@ func (s *AuthService) GenerateTokenPair(user *User) (*TokenPair, string, error) 
 		TokenType:    "Bearer",
 	}
 
-	// Hash tokens for storage
-	tokenHash := s.hashToken(accessToken)
+	// Hash tokens for storage (currently not persisted)
+	// tokenHash := s.hashToken(accessToken)
 
 	return tokenPair, sessionID, nil
 }
